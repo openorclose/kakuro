@@ -18,7 +18,7 @@ const range = (start, end) => Array.from({
     length: (end - start)
 }, (v, k) => k + start);
 let clueCells = [];
-grid = grid.map(x => x.match(/\[.*\]|\w\d*/g)).map((row, rowIndex) =>
+grid = grid.map(x => x.match(/\[.*]|\w\d*/g)).map((row, rowIndex) =>
     row.map((cell, colIndex) => {
         let data = {
             pos: {
@@ -26,7 +26,7 @@ grid = grid.map(x => x.match(/\[.*\]|\w\d*/g)).map((row, rowIndex) =>
                 col: colIndex,
             }
         };
-        let firstChar = cell[0]
+        let firstChar = cell[0];
         let type = Type.clue;
         let hasDown = firstChar === "[" || firstChar === "d";
         let hasRight = firstChar === "[" || firstChar === "r";
@@ -52,6 +52,7 @@ grid = grid.map(x => x.match(/\[.*\]|\w\d*/g)).map((row, rowIndex) =>
         return data;
     })
 );
+console.log("test");
 for (let clue of clueCells) {
     let ownedCells = [];
     if (clue.right) {
@@ -75,4 +76,5 @@ for (let clue of clueCells) {
         }
     }
 }
+
 console.log(JSON.stringify(grid));
