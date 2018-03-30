@@ -14,6 +14,48 @@ let grid = [
     "r6nnbr10nnnn",
     "r7nnbbbr4nn"
 ];
+let getPossibleValues = (() => {
+    let map = {};
+
+    function insertSorted(array, value) {
+        let low = 0, high = array.length;
+
+        while (low < high) {
+            let mid = (low + high) >>> 1;
+            if (array[mid] < value) low = mid + 1;
+            else high = mid;
+        }
+        return array.substring(0, low) + value + array.substring(low);
+    }
+
+    return (sum, numSquares, usedNumbers = "") => {
+        let key = [sum, numSquares, usedNumbers].toString();
+        if (map[key]) {
+            return map[key];
+        }
+        if (numSquares === 1) {
+            return map[key] = usedNumbers.includes(sum) || sum > 9 || sum < 1 ? null : [String(sum)];
+        }
+        let possibleValues = [];
+        let max = Math.min(sum, 9);
+        for (let i = 1; i < max; i++) {
+            if (!usedNumbers.includes(i)) {
+                let lowerStep = getPossibleValues(sum - i, numSquares - 1, insertSorted(usedNumbers, i));
+                if (lowerStep) {
+                    for (let possibleValue of lowerStep) {
+                        if (possibleValue) {
+                            possibleValue = insertSorted(possibleValue, i);
+                            if (!possibleValues.includes(possibleValue)) {
+                                possibleValues.push(possibleValue);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return map[key] = possibleValues;
+    }
+})();
 const range = (start, end) => Array.from({
     length: (end - start)
 }, (v, k) => k + start);
@@ -52,7 +94,6 @@ grid = grid.map(x => x.match(/\[.*]|\w\d*/g)).map((row, rowIndex) =>
         return data;
     })
 );
-console.log("test");
 for (let clue of clueCells) {
     let ownedCells = [];
     if (clue.right) {
@@ -77,4 +118,4 @@ for (let clue of clueCells) {
     }
 }
 
-console.log(JSON.stringify(grid));
+//console.log(JSON.stringify(grid));
