@@ -53,11 +53,23 @@ let getPossibleCombinations = (() => {
         return map[key] = possibleValues;
     }
 })();
-const range = (start, end) => Array.from({
-    length: (end - start)
-}, (v, k) => k + start);
 let clueCells = [];
 let numberCells = [];
+class Sum {
+    constructor(sum) {
+        this.sum = sum;
+        this.unused = [1,2,3,4,5,6,7,8,9];
+        this.possibleCombinations = [];
+    }
+    updatePossibleDigits() {
+        this.possibleDigits = [...new Set([...this.possibleCombinations.join("")].map(Number))]
+    }
+    addUsedDigit(digit) {
+        this.unused = this.unused.filter(x=>x!==digit);
+        this.possibleCombinations = this.possibleCombinations.filter(x=>x.includes(digit));
+        this.updatePossibleDigits();
+    }
+}
 grid = grid.map(x => x.match(/\[.*]|\w\d*/g)).map((row, rowIndex) =>
     row.map((cell, colIndex) => {
         let data = {
@@ -74,19 +86,14 @@ grid = grid.map(x => x.match(/\[.*]|\w\d*/g)).map((row, rowIndex) =>
             type = Type.unused;
         } else if (firstChar === "n") {
             type = Type.number;
-            data.currentGuesses = [];
             data.confirmed = 0;
             numberCells.push(data);
         }
         if (hasRight) {
-            data.right = {
-                sum: parseInt(/r(\d+)/.exec(cell)[1], 10),
-            };
+            data.right = new Sum(parseInt(/r(\d+)/.exec(cell)[1], 10));
         }
         if (hasDown) {
-            data.down = {
-                sum: parseInt(/d(\d+)/.exec(cell)[1], 10),
-            };
+            data.down =  new Sum(parseInt(/d(\d+)/.exec(cell)[1], 10));
         }
         data.type = type;
         if (type === Type.clue) {
@@ -96,17 +103,6 @@ grid = grid.map(x => x.match(/\[.*]|\w\d*/g)).map((row, rowIndex) =>
     })
 );
 for (let clue of clueCells) {
-    let ownedCells = [];
-    let operations = {
-        down : {
-            incrementRowBy: 1,
-            incrementColBy: 0,
-        },
-        right: {
-            incrementRowBy: 0,
-            incrementColBy: 1,
-        },
-    };
     if (clue.right) {
         let row = clue.pos.row;
         let col = clue.pos.col + 1;
@@ -115,14 +111,10 @@ for (let clue of clueCells) {
         while (currCell && currCell.type === Type.number) {
             numCells++;
             currCell.ownedByHorizontal = clue;
-            ownedCells.push(currCell);
             currCell = grid[row][++col];
         }
-        let possibleCombinations = getPossibleCombinations(clue.right.sum, numCells);
-        let possibleDigits = [...new Set([...possibleCombinations.join("")].map(Number))];
-        clue.right.possibleCombinations = possibleCombinations;
-        clue.right.possibleDigits = possibleDigits;
-        clue.right.used = [];
+        clue.right.possibleCombinations = getPossibleCombinations(clue.right.sum, numCells);
+        clue.right.updatePossibleDigits();
     }
     if (clue.down) {
         let row = clue.pos.row + 1;
@@ -132,59 +124,32 @@ for (let clue of clueCells) {
         while (currCell && currCell.type === Type.number) {
             numCells++;
             currCell.ownedByVertical = clue;
-            ownedCells.push(currCell);
             currCell = grid[++row] && grid[row][col];
         }
-        let possibleCombinations = getPossibleCombinations(clue.down.sum, numCells);
-        let possibleDigits = [...new Set([...possibleCombinations.join("")].map(Number))];
-        clue.down.possibleCombinations = possibleCombinations;
-        clue.down.possibleDigits = possibleDigits;
-        clue.down.used = [];
+        clue.down.possibleCombinations = getPossibleCombinations(clue.down.sum, numCells);
+        clue.down.updatePossibleDigits();
     }
-    clue.ownedCells = ownedCells;
 }
 let isNarrowedDown = true;
-function intersection (a, ...b) {
-    return a.filter(x => {
-        for (let test of b) {
-            if (!test.includes(x)) {
-                return false;
-            }
-        }
-        return true;
-    });
-}
-function inverse (a) {
-    return [1,2,3,4,5,6,7,8,9].filter(x=>!a.includes(x));
-}
 while (isNarrowedDown) {
-    console.log(true);
     isNarrowedDown = false;
     for (let cell of numberCells) {
         if (!cell.confirmed) {
-            let horizontalPossibilities = [1, 2, 3, 4, 5, 6, 7, 8, 9],
-                verticalPossibilities = [1, 2, 3, 4, 5, 6, 7, 8, 9], horizontalUsed = [1, 2, 3, 4, 5, 6, 7, 8, 9],
-                verticalUsed = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-            if (cell.ownedByHorizontal) {
-                horizontalPossibilities = cell.ownedByHorizontal.right.possibleDigits;
-                horizontalUsed = cell.ownedByHorizontal.right.used;
-            }
-            if (cell.ownedByVertical) {
-                verticalPossibilities = cell.ownedByVertical.down.possibleDigits;
-                verticalUsed = cell.ownedByVertical.down.used;
-            }
-            let possibilities = intersection(horizontalPossibilities, verticalPossibilities, inverse(horizontalUsed), inverse(verticalUsed));
-            //console.log(horizontalPossibilities, verticalPossibilities, inverse(horizontalUsed), inverse(verticalUsed));
-            //console.log(intersection(horizontalPossibilities, verticalPossibilities, inverse(horizontalUsed), inverse(verticalUsed)));
-
+            let horizontalOwner = cell.ownedByHorizontal;
+            let verticalOwner = cell.ownedByVertical;
+            let possibilities = horizontalOwner.right.possibleDigits.filter(mustBeInAll=>
+                verticalOwner.down.possibleDigits.includes(mustBeInAll) &&
+                horizontalOwner.right.unused.includes(mustBeInAll) &&
+                verticalOwner.down.unused.includes(mustBeInAll)
+            );
             if (possibilities.length === 1) {
                 let answer = possibilities[0];
                 cell.confirmed = answer;
-                cell.ownedByVertical.down.used.push(answer);
-                cell.ownedByHorizontal.right.used.push(answer);
+                verticalOwner.down.addUsedDigit(answer);
+                horizontalOwner.right.addUsedDigit(answer);
                 isNarrowedDown = true;
             }
         }
     }
 }
-console.log(numberCells.map(x=>x.confirmed).join());
+console.log(numberCells.map(x=>x.confirmed).join("|"));
