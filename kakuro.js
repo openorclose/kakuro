@@ -3,7 +3,7 @@ let Type = {
     unused: Symbol("unused"),
     number: Symbol("number"),
 };
-let grid = [
+let grid2 = [
     "bd3d4bbbbd15d3",
     "r4nnd16d6br3nn",
     "r10nnnnd14[d16r7]nn",
@@ -14,8 +14,23 @@ let grid = [
     "r6nnbr10nnnn",
     "r7nnbbbr4nn"
 ];
+let grid = [
+    "bd16d10bd10d23bbd30d6",
+    "r11nn[d24r16]nnd12r7nn",
+    "r38nnnnnn[d13r6]nn",
+    "br5nn[d21r17]nnnnn",
+    "bd19[d31r14]nnd16r10nnd6",
+    "r25nnnnnd19r8nn",
+    "r10nnr11nnn[d29r11]nn",
+    "r14nnd11r29nnnnn",
+    "b[d7r15]nnd5[d14r14]nnd21b",
+    "r15nnnnn[d8r14]nnd7",
+    "r11nnr37nnnnnn",
+    "r5nnbr6nnr9nn"
+];
 let getPossibleCombinations = (() => {
     let map = {};
+
     function insertSorted(array, value) {
         let low = 0, high = array.length;
         while (low < high) {
@@ -25,6 +40,7 @@ let getPossibleCombinations = (() => {
         }
         return array.substring(0, low) + value + array.substring(low);
     }
+
     return (sum, numSquares, usedNumbers = "") => {
         let key = [sum, numSquares, usedNumbers].toString();
         if (map[key]) {
@@ -58,20 +74,24 @@ let numberCells = [];
 class Sum {
     constructor(sum) {
         this.sum = sum;
-        this.unused = [1,2,3,4,5,6,7,8,9];
+        this.unused = [1, 2, 3, 4, 5, 6, 7, 8, 9];
         this.possibleCombinations = [];
     }
+
     updatePossibleDigits() {
         this.possibleDigits = [...new Set([...this.possibleCombinations.join("")].map(Number))]
     }
+
     addUsedDigit(digit) {
-        this.unused = this.unused.filter(x=>x!==digit);
-        this.possibleCombinations = this.possibleCombinations.filter(x=>x.includes(digit));
+        this.unused = this.unused.filter(x => x !== digit);
+        this.possibleCombinations = this.possibleCombinations.filter(x => x.includes(digit));
         this.updatePossibleDigits();
     }
 }
-grid = grid.map(x => x.match(/\[.*]|\w\d*/g)).map((row, rowIndex) =>
+
+grid = grid.map(x => x.match(/\[[a-z0-9]*]|\w\d*/g)).map((row, rowIndex) =>
     row.map((cell, colIndex) => {
+        console.log(row);
         let data = {
             pos: {
                 row: rowIndex,
@@ -93,7 +113,7 @@ grid = grid.map(x => x.match(/\[.*]|\w\d*/g)).map((row, rowIndex) =>
             data.right = new Sum(parseInt(/r(\d+)/.exec(cell)[1], 10));
         }
         if (hasDown) {
-            data.down =  new Sum(parseInt(/d(\d+)/.exec(cell)[1], 10));
+            data.down = new Sum(parseInt(/d(\d+)/.exec(cell)[1], 10));
         }
         data.type = type;
         if (type === Type.clue) {
@@ -102,6 +122,9 @@ grid = grid.map(x => x.match(/\[.*]|\w\d*/g)).map((row, rowIndex) =>
         return data;
     })
 );
+for (let row of grid) {
+    console.log(row.length);
+}
 for (let clue of clueCells) {
     if (clue.right) {
         let row = clue.pos.row;
@@ -137,7 +160,7 @@ while (isNarrowedDown) {
         if (!cell.confirmed) {
             let horizontalOwner = cell.ownedByHorizontal;
             let verticalOwner = cell.ownedByVertical;
-            let possibilities = horizontalOwner.right.possibleDigits.filter(mustBeInAll=>
+            let possibilities = horizontalOwner.right.possibleDigits.filter(mustBeInAll =>
                 verticalOwner.down.possibleDigits.includes(mustBeInAll) &&
                 horizontalOwner.right.unused.includes(mustBeInAll) &&
                 verticalOwner.down.unused.includes(mustBeInAll)
@@ -152,4 +175,4 @@ while (isNarrowedDown) {
         }
     }
 }
-console.log(numberCells.map(x=>x.confirmed).join("|"));
+console.log(numberCells.map(x => x.confirmed).join("|"));
