@@ -74,24 +74,49 @@ let numberCells = [];
 class Sum {
     constructor(sum) {
         this.sum = sum;
+        this.usedDigits = [];
         this.unused = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        this.possibleCombinationsIgnoringCurrentState =
         this.possibleCombinations = [];
+        this.ownedCells = [];
     }
-
-    updatePossibleDigits() {
+    updatePossibleCombinationsAndDigits() {
+        this.possibleCombinations = this.possibleCombinationsIgnoringCurrentState.filter(x => this.usedDigits.every(used => x.includes(used)));
         this.possibleDigits = [...new Set([...this.possibleCombinations.join("")].map(Number))]
     }
-
     addUsedDigit(digit) {
         this.unused = this.unused.filter(x => x !== digit);
-        this.possibleCombinations = this.possibleCombinations.filter(x => x.includes(digit));
-        this.updatePossibleDigits();
+        this.usedDigits.push(digit);
+        this.updatePossibleCombinationsAndDigits();
+    }
+    removeUsedDigit(digit) {
+        this.usedDigits.splice(this.usedDigits.indexOf(digit), 1);
+        this.updatePossibleCombinationsAndDigits();
     }
 }
-
+class NumberCell {
+    constructor(pos) {
+        this.type = Type.number;
+        this.confirmed = 0;
+        this.pos = pos;
+        this.possibleDigits = [];
+        this.horizontalOwner = null;
+        this.verticalOwner = null;
+    }
+    updatePossibleDigits() {
+        this.possibleDigits = this.horizontalOwner.right.possibleDigits.filter(mustBeInAll =>
+            this.verticalOwner.down.possibleDigits.includes(mustBeInAll) &&
+            inverse(this.horizontalOwner.right.usedDigits).includes(mustBeInAll) &&
+            inverse(this.verticalOwner.down.usedDigits).includes(mustBeInAll)
+        );
+    }
+    callOnBothOwners(method, ...args) {
+        this.horizontalOwner.right[method](...args);
+        this.verticalOwner.down[method](...args);
+    }
+}
 grid = grid.map(x => x.match(/\[[a-z0-9]*]|\w\d*/g)).map((row, rowIndex) =>
     row.map((cell, colIndex) => {
-        console.log(row);
         let data = {
             pos: {
                 row: rowIndex,
@@ -106,7 +131,7 @@ grid = grid.map(x => x.match(/\[[a-z0-9]*]|\w\d*/g)).map((row, rowIndex) =>
             type = Type.unused;
         } else if (firstChar === "n") {
             type = Type.number;
-            data.confirmed = 0;
+            data = new NumberCell(data.pos);
             numberCells.push(data);
         }
         if (hasRight) {
@@ -122,9 +147,6 @@ grid = grid.map(x => x.match(/\[[a-z0-9]*]|\w\d*/g)).map((row, rowIndex) =>
         return data;
     })
 );
-for (let row of grid) {
-    console.log(row.length);
-}
 for (let clue of clueCells) {
     if (clue.right) {
         let row = clue.pos.row;
@@ -133,11 +155,12 @@ for (let clue of clueCells) {
         let numCells = 0;
         while (currCell && currCell.type === Type.number) {
             numCells++;
-            currCell.ownedByHorizontal = clue;
+            currCell.horizontalOwner = clue;
+            clue.right.ownedCells.push(currCell);
             currCell = grid[row][++col];
         }
-        clue.right.possibleCombinations = getPossibleCombinations(clue.right.sum, numCells);
-        clue.right.updatePossibleDigits();
+        clue.right.possibleCombinationsIgnoringCurrentState = getPossibleCombinations(clue.right.sum, numCells);
+        clue.right.updatePossibleCombinationsAndDigits();
     }
     if (clue.down) {
         let row = clue.pos.row + 1;
@@ -146,33 +169,80 @@ for (let clue of clueCells) {
         let numCells = 0;
         while (currCell && currCell.type === Type.number) {
             numCells++;
-            currCell.ownedByVertical = clue;
+            currCell.verticalOwner = clue;
+            clue.down.ownedCells.push(currCell);
             currCell = grid[++row] && grid[row][col];
         }
-        clue.down.possibleCombinations = getPossibleCombinations(clue.down.sum, numCells);
-        clue.down.updatePossibleDigits();
+        clue.down.possibleCombinationsIgnoringCurrentState = getPossibleCombinations(clue.down.sum, numCells);
+        clue.down.updatePossibleCombinationsAndDigits();
     }
 }
+let allNumberCells = [...numberCells];
 let isNarrowedDown = true;
 while (isNarrowedDown) {
     isNarrowedDown = false;
     for (let cell of numberCells) {
         if (!cell.confirmed) {
-            let horizontalOwner = cell.ownedByHorizontal;
-            let verticalOwner = cell.ownedByVertical;
-            let possibilities = horizontalOwner.right.possibleDigits.filter(mustBeInAll =>
-                verticalOwner.down.possibleDigits.includes(mustBeInAll) &&
-                horizontalOwner.right.unused.includes(mustBeInAll) &&
-                verticalOwner.down.unused.includes(mustBeInAll)
-            );
+            cell.updatePossibleDigits();
+            let possibilities = cell.possibleDigits;
+
             if (possibilities.length === 1) {
                 let answer = possibilities[0];
                 cell.confirmed = answer;
-                verticalOwner.down.addUsedDigit(answer);
-                horizontalOwner.right.addUsedDigit(answer);
+                numberCells.splice(numberCells.indexOf(cell), 1);
+                cell.callOnBothOwners("addUsedDigit", answer);
                 isNarrowedDown = true;
             }
+            cell.potentials = possibilities;
         }
     }
 }
-console.log(numberCells.map(x => x.confirmed).join("|"));
+console.log(allNumberCells.map(x=>x.confirmed).join("|"));
+function inverse (a) {
+    return [1,2,3,4,5,6,7,8,9].filter(x=>!a.includes(x));
+}
+function bruteForce(index) {
+    //console.log(index);
+    let cell = numberCells[index];
+    if (index === numberCells.length - 1) {
+        if (cell.potentials.length === 1) {
+            cell.guess = cell.potentials[0];
+            return true;
+        } else {
+            return false;
+        }
+    }
+    for (let guess of cell.potentials) {
+        cell.guess = guess;
+        cell.verticalOwner.down.addUsedDigit(guess);
+        cell.horizontalOwner.right.addUsedDigit(guess);
+        for (let affectedCell of cell.verticalOwner.down.ownedCells.concat(cell.horizontalOwner.right.ownedCells)) {
+            let horizontalOwner = affectedCell.horizontalOwner;
+            let verticalOwner = affectedCell.verticalOwner;
+            let possibilities = horizontalOwner.right.possibleDigits.filter(mustBeInAll =>
+                verticalOwner.down.possibleDigits.includes(mustBeInAll) &&
+                inverse(horizontalOwner.right.usedDigits).includes(mustBeInAll) &&
+                inverse(verticalOwner.down.usedDigits).includes(mustBeInAll)
+            );
+            affectedCell.potentials = possibilities;
+        }
+        if (bruteForce(index + 1)) {
+            return true;
+        }
+        cell.guess = 0;
+        cell.horizontalOwner.right.removeUsedDigit(guess);
+        cell.verticalOwner.down.removeUsedDigit(guess);
+        for (let affectedCell of cell.verticalOwner.down.ownedCells.concat(cell.horizontalOwner.right.ownedCells)) {
+            let horizontalOwner = affectedCell.horizontalOwner;
+            let verticalOwner = affectedCell.verticalOwner;
+            let possibilities = horizontalOwner.right.possibleDigits.filter(mustBeInAll =>
+                verticalOwner.down.possibleDigits.includes(mustBeInAll) &&
+                inverse(horizontalOwner.right.usedDigits).includes(mustBeInAll) &&
+                inverse(verticalOwner.down.usedDigits).includes(mustBeInAll)
+            );
+            affectedCell.potentials = possibilities;
+        }
+    }
+}
+bruteForce(0);
+console.log(numberCells.map(x => x.guess).join("|"));
