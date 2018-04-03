@@ -34,24 +34,18 @@ let grid3 = [
     "r5nnbr6nnr9nn"
 ];
 
-let oneToNine = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-function inverse(a) {
-    return oneToNine.filter(x => !a.includes(x));
-}
-
 let getPossibleCombinations = (() => {
     let map = {};
 
     function insertSorted(array, value) {
-        let low = 0, high = array.length;
+        let high = array.length;
+        let low = 0;
         while (low < high) {
             let mid = (low + high) >>> 1;
             if (array[mid] < value) low = mid + 1;
             else high = mid;
         }
         return array.substring(0, low) + value + array.substring(low);
-
     }
 
     return (sum, numSquares, usedNumbers = "") => {
@@ -60,29 +54,27 @@ let getPossibleCombinations = (() => {
             return map[key];
         }
         if (numSquares === 1) {
-            if (!usedNumbers.includes(sum) && sum <= 9 && sum >= 1) {
-                return map[key] = [String(sum)];
-            }
-        } else {
-            let possibleValues = [];
-            let max = Math.min(sum, 9);
-            for (let i = 1; i < max; i++) {
-                if (!usedNumbers.includes(i)) {
-                    let lowerStep = getPossibleCombinations(sum - i, numSquares - 1, insertSorted(usedNumbers, i));
-                    if (lowerStep) {
-                        for (let possibleValue of lowerStep) {
-                            if (possibleValue) {
-                                possibleValue = insertSorted(possibleValue, i);
-                                if (!possibleValues.includes(possibleValue)) {
-                                    possibleValues.push(possibleValue);
-                                }
+            return (!usedNumbers.includes(sum) && sum <= 9 && sum >= 1) && (map[key] = [String(sum)]);
+        }
+        let possibleValues = [];
+        let max = Math.min(sum, 9);
+        for (let i = 1; i < max; i++) {
+            if (!usedNumbers.includes(i)) {
+                let lowerStep = getPossibleCombinations(sum - i, numSquares - 1, insertSorted(usedNumbers, i));
+                if (lowerStep) {
+                    for (let possibleValue of lowerStep) {
+                        if (possibleValue) {
+                            possibleValue = insertSorted(possibleValue, i);
+                            if (!possibleValues.includes(possibleValue)) {
+                                possibleValues.push(possibleValue);
                             }
                         }
                     }
                 }
             }
-            return map[key] = possibleValues;
         }
+        return map[key] = possibleValues;
+
     }
 })();
 
@@ -99,8 +91,11 @@ class Sum {
     }
 
     updatePossibleCombinationsAndDigits() {
-        this.possibleCombinations = this.possibleCombinationsIgnoringCurrentState.filter(x => this.usedDigits.every(used => x.includes(used)));
-        this.possibleDigits = [...new Set([].concat(...this.possibleCombinations))];
+        let oldLength = this.possibleCombinations.length;
+        this.possibleCombinations = this.possibleCombinationsIgnoringCurrentState.filter(combination => this.usedDigits.every(usedDigit => combination.includes(usedDigit)));
+        if (oldLength !== this.possibleCombinations.length) {
+            this.possibleDigits = [...new Set([].concat(...this.possibleCombinations))];
+        }
     }
 
     addUsedDigit(digit) {
@@ -116,20 +111,20 @@ class Sum {
 
 class NumberCell {
     constructor(pos) {
-        this.type = Type.number;
         this.confirmed = 0;
         this.pos = pos;
         this.possibleDigits = [];
+        this.affectedCellsPreviousPossibleDigits = [];
         this.horizontalOwner = null;
         this.verticalOwner = null;
         this.affectedCells = null;
     }
 
     updatePossibleDigits() {
-        this.possibleDigits = this.horizontalOwner.right.possibleDigits.filter(mustBeInAll =>
-            this.verticalOwner.down.possibleDigits.includes(mustBeInAll) &&
-            inverse(this.horizontalOwner.right.usedDigits).includes(mustBeInAll) &&
-            inverse(this.verticalOwner.down.usedDigits).includes(mustBeInAll)
+        this.possibleDigits = this.horizontalOwner.right.possibleDigits.filter(digit =>
+            this.verticalOwner.down.possibleDigits.includes(digit) &&
+            !this.horizontalOwner.right.usedDigits.includes(digit) &&
+            !this.verticalOwner.down.usedDigits.includes(digit)
         );
     }
 
@@ -138,24 +133,23 @@ class NumberCell {
         this.verticalOwner.down[method](...args);
     }
 
-    updateAffectedCells() {
-        if (!this.affectedCells) {
-            this.affectedCells = this.verticalOwner.down.ownedCells.concat(this.horizontalOwner.right.ownedCells);
-        }
-        this.affectedCells.forEach(affectedCell => affectedCell.updatePossibleDigits());
+    populateAffectedCells() {
+        this.affectedCells = this.verticalOwner.down.ownedCells.concat(this.horizontalOwner.right.ownedCells);
     }
 
     setDigit(digit) {
         this.confirmed = digit;
         this.callOnBothOwners("addUsedDigit", digit);
-        this.updateAffectedCells();
+        this.affectedCellsPreviousPossibleDigits = this.affectedCells.map(cell => cell.possibleDigits);
+        this.affectedCells.forEach(cell => cell.updatePossibleDigits());
     }
 
     resetDigit() {
         this.callOnBothOwners("removeUsedDigit", this.confirmed);
         this.confirmed = 0;
-        this.updateAffectedCells();
-
+        for (let i = 0; i < this.affectedCells.length; i++) {
+            this.affectedCells[i].possibleDigits = this.affectedCellsPreviousPossibleDigits[i];
+        }
     }
 }
 
@@ -208,8 +202,10 @@ grid = board.map(row =>
     }).join("")
 );
 console.log(grid);
-grid = grid.map(x => x.match(/\[[a-z0-9]*]|\w\d*/g)).map((row, rowIndex) =>
-    row.map((cell, colIndex) => {
+let rightRegex = /r(\d+)/;
+let downRegex = /d(\d+)/;
+grid = grid.map((row, rowIndex) =>
+    row.match(/\[[a-z0-9]*]|\w\d*/g).map((cell, colIndex) => {
         let data = {
             pos: {
                 row: rowIndex,
@@ -227,53 +223,43 @@ grid = grid.map(x => x.match(/\[[a-z0-9]*]|\w\d*/g)).map((row, rowIndex) =>
             data = new NumberCell(data.pos);
             numberCells.push(data);
         }
-        if (hasRight) {
-            data.right = new Sum(parseInt(/r(\d+)/.exec(cell)[1], 10));
-        }
-        if (hasDown) {
-            data.down = new Sum(parseInt(/d(\d+)/.exec(cell)[1], 10));
-        }
+        if (hasRight) data.right = new Sum(parseInt(rightRegex.exec(cell)[1], 10));
+        if (hasDown) data.down = new Sum(parseInt(downRegex.exec(cell)[1], 10));
         data.type = type;
-        if (type === Type.clue) {
-            clueCells.push(data);
-        }
+        if (type === Type.clue) clueCells.push(data);
         return data;
     })
 );
 let start = Date.now();
 for (let clue of clueCells) {
-    if (clue.right) {
-        let row = clue.pos.row;
-        let col = clue.pos.col + 1;
-        let currCell = grid[row][col];
-        let numCells = 0;
-        while (currCell && currCell.type === Type.number) {
-            numCells++;
-            currCell.horizontalOwner = clue;
-            clue.right.ownedCells.push(currCell);
-            currCell = grid[row][++col];
+    let types = [clue.right, clue.down];
+    for (let type of types) {
+        if (type) {
+            let row = clue.pos.row;
+            let col = clue.pos.col;
+            let isRight = type === clue.right;
+            isRight ? col++ : row++;
+            let currCell = grid[row][col];
+            let numCells = 0;
+            let sum = clue[isRight? "right" : "down"];
+            while (currCell && currCell.type === Type.number) {
+                numCells++;
+                currCell[isRight? "horizontalOwner" : "verticalOwner"] = clue;
+                sum.ownedCells.push(currCell);
+                isRight ? col++ : row++;
+                currCell = grid[row] && grid[row][col];
+            }
+            sum.possibleCombinationsIgnoringCurrentState = getPossibleCombinations(sum.sum, numCells).map(combination => [...combination].map(Number));
+            sum.updatePossibleCombinationsAndDigits();
         }
-        clue.right.possibleCombinationsIgnoringCurrentState = getPossibleCombinations(clue.right.sum, numCells).map(combination => [...combination].map(Number));
-        clue.right.updatePossibleCombinationsAndDigits();
-    }
-    if (clue.down) {
-        let row = clue.pos.row + 1;
-        let col = clue.pos.col;
-        let currCell = grid[row][col];
-        let numCells = 0;
-        while (currCell && currCell.type === Type.number) {
-            numCells++;
-            currCell.verticalOwner = clue;
-            clue.down.ownedCells.push(currCell);
-            currCell = grid[++row] && grid[row][col];
-        }
-        clue.down.possibleCombinationsIgnoringCurrentState = getPossibleCombinations(clue.down.sum, numCells).map(combination => [...combination].map(Number));
-        clue.down.updatePossibleCombinationsAndDigits();
     }
 }
 let allNumberCells = [...numberCells];
 let isNarrowedDown = true;
-numberCells.forEach(cell => cell.updatePossibleDigits());
+for (let cell of numberCells) {
+    cell.updatePossibleDigits();
+    cell.populateAffectedCells();
+}
 while (isNarrowedDown) {
     isNarrowedDown = false;
     for (let cell of numberCells) {
@@ -290,19 +276,14 @@ while (isNarrowedDown) {
 function bruteForce(index) {
     let cell = numberCells[index];
     if (index === 0) {
-        if (cell.possibleDigits.length === 1) {
-            cell.confirmed = cell.possibleDigits[0];
-            return true;
-        }
-    } else {
-        for (let guess of cell.possibleDigits) {
-            cell.setDigit(guess);
-            if (bruteForce(index - 1)) {
-                return true;
-            }
-            cell.resetDigit();
-        }
+        return cell.possibleDigits.length === 1 && (cell.confirmed = cell.possibleDigits[0]);
     }
+    for (let guess of cell.possibleDigits) {
+        cell.setDigit(guess);
+        if (bruteForce(index - 1)) return true;
+        cell.resetDigit();
+    }
+
 }
 
 bruteForce(numberCells.length - 1);
