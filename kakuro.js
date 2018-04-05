@@ -50,27 +50,19 @@ let getPossibleCombinations = (() => {
 
     return (sum, numSquares, usedNumbers = "") => {
         let key = [sum, numSquares, usedNumbers].toString();
-        if (map[key]) {
-            return map[key];
-        }
+        if (map[key]) return map[key];
         if (numSquares === 1) {
-            return (!usedNumbers.includes(sum) && sum <= 9 && sum >= 1) && (map[key] = [String(sum)]);
+            return  map[key] = !usedNumbers.includes(sum) && sum <= 9 && sum >= 1 ? [String(sum)] : [];
         }
         let possibleValues = [];
         let max = Math.min(sum, 9);
         for (let i = 1; i < max; i++) {
             if (!usedNumbers.includes(i)) {
                 let lowerStep = getPossibleCombinations(sum - i, numSquares - 1, insertSorted(usedNumbers, i));
-                if (lowerStep) {
                     for (let possibleValue of lowerStep) {
-                        if (possibleValue) {
-                            possibleValue = insertSorted(possibleValue, i);
-                            if (!possibleValues.includes(possibleValue)) {
-                                possibleValues.push(possibleValue);
-                            }
-                        }
+                        possibleValue = insertSorted(possibleValue, i);
+                        if (!possibleValues.includes(possibleValue)) possibleValues.push(possibleValue);
                     }
-                }
             }
         }
         return map[key] = possibleValues;
@@ -133,7 +125,7 @@ class NumberCell {
         this.verticalOwner.down[method](...args);
     }
 
-    populateAffectedCells() {
+    locateAffectedCells() {
         this.affectedCells = this.verticalOwner.down.ownedCells.concat(this.horizontalOwner.right.ownedCells);
     }
 
@@ -147,9 +139,9 @@ class NumberCell {
     resetDigit() {
         this.callOnBothOwners("removeUsedDigit", this.confirmed);
         this.confirmed = 0;
-        for (let i = 0; i < this.affectedCells.length; i++) {
-            this.affectedCells[i].possibleDigits = this.affectedCellsPreviousPossibleDigits[i];
-        }
+        this.affectedCells.forEach((cell, index) => {
+            cell.possibleDigits = this.affectedCellsPreviousPossibleDigits[index];
+        });
     }
 }
 
@@ -232,33 +224,33 @@ grid = grid.map((row, rowIndex) =>
 );
 let start = Date.now();
 for (let clue of clueCells) {
-    let types = [clue.right, clue.down];
+    let types = [];
+    clue.right && types.push(clue.right);
+    clue.down && types.push(clue.down);
     for (let type of types) {
-        if (type) {
-            let row = clue.pos.row;
-            let col = clue.pos.col;
-            let isRight = type === clue.right;
+        let row = clue.pos.row;
+        let col = clue.pos.col;
+        let isRight = type === clue.right;
+        isRight ? col++ : row++;
+        let currCell = grid[row][col];
+        let numCells = 0;
+        let sum = clue[isRight ? "right" : "down"];
+        while (currCell && currCell.type === Type.number) {
+            numCells++;
+            currCell[isRight ? "horizontalOwner" : "verticalOwner"] = clue;
+            sum.ownedCells.push(currCell);
             isRight ? col++ : row++;
-            let currCell = grid[row][col];
-            let numCells = 0;
-            let sum = clue[isRight? "right" : "down"];
-            while (currCell && currCell.type === Type.number) {
-                numCells++;
-                currCell[isRight? "horizontalOwner" : "verticalOwner"] = clue;
-                sum.ownedCells.push(currCell);
-                isRight ? col++ : row++;
-                currCell = grid[row] && grid[row][col];
-            }
-            sum.possibleCombinationsIgnoringCurrentState = getPossibleCombinations(sum.sum, numCells).map(combination => [...combination].map(Number));
-            sum.updatePossibleCombinationsAndDigits();
+            currCell = grid[row] && grid[row][col];
         }
+        sum.possibleCombinationsIgnoringCurrentState = getPossibleCombinations(sum.sum, numCells).map(combination => [...combination].map(Number));
+        sum.updatePossibleCombinationsAndDigits();
     }
 }
 let allNumberCells = [...numberCells];
 let isNarrowedDown = true;
 for (let cell of numberCells) {
     cell.updatePossibleDigits();
-    cell.populateAffectedCells();
+    cell.locateAffectedCells();
 }
 while (isNarrowedDown) {
     isNarrowedDown = false;
