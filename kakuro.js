@@ -36,6 +36,10 @@ let grid3 = [
 
 let getPossibleCombinations = (() => {
     let map = {};
+    let rangeTo = [, "1"];
+    for (let i = 2; i <= 9; i++) {
+        rangeTo[i] = rangeTo[i - 1] + i;
+    }
 
     function insertSorted(array, value) {
         let high = array.length;
@@ -48,28 +52,26 @@ let getPossibleCombinations = (() => {
         return array.substring(0, low) + value + array.substring(low);
     }
 
-    return (sum, numSquares, usedNumbers = "") => {
-        let key = [sum, numSquares, usedNumbers].toString();
+    function recur(sum, numSquares, unusedNumbers) {
+        let key = [sum, numSquares, unusedNumbers].toString();
         if (map[key]) return map[key];
         if (numSquares === 1) {
-            return  map[key] = !usedNumbers.includes(sum) && sum <= 9 && sum >= 1 ? [String(sum)] : [];
+            return map[key] = unusedNumbers.includes(sum) && sum <= 9 && sum >= 1 ? [String(sum)] : [];
         }
         let possibleValues = [];
-        let max = Math.min(sum, 9);
-        for (let i = 1; i < max; i++) {
-            if (!usedNumbers.includes(i)) {
-                let lowerStep = getPossibleCombinations(sum - i, numSquares - 1, insertSorted(usedNumbers, i));
-                    for (let possibleValue of lowerStep) {
-                        possibleValue = insertSorted(possibleValue, i);
-                        if (!possibleValues.includes(possibleValue)) possibleValues.push(possibleValue);
-                    }
+        [...unusedNumbers].forEach(i => {
+            let lowerStep = recur(sum - i, numSquares - 1, unusedNumbers.replace(String(i), ""));
+            for (let possibleValue of lowerStep) {
+                possibleValue = insertSorted(possibleValue, i);
+                if (!possibleValues.includes(possibleValue)) possibleValues.push(possibleValue);
             }
-        }
+        });
         return map[key] = possibleValues;
-
     }
-})();
 
+    return (sum, x) => recur(sum, x, rangeTo[Math.min(9, sum)]);
+})();
+console.log(getPossibleCombinations(45, 9))
 let clueCells = [];
 let numberCells = [];
 
@@ -184,6 +186,7 @@ grid = board.map(row =>
         if (col === 0) {
             return "n";
         }
+
         if (col < 1000) {
             return "d" + col / 10;
         }
