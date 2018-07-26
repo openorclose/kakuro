@@ -260,8 +260,7 @@ while (isNarrowedDown) {
     for (let cell of numberCells) {
         let possibilities = cell.possibleDigits;
         if (possibilities.length === 1) {
-            let answer = possibilities[0];
-            cell.setDigit(answer);
+            cell.setDigit(possibilities[0]);
             numberCells.splice(numberCells.indexOf(cell), 1);
             isNarrowedDown = true;
         }
