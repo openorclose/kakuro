@@ -43,44 +43,49 @@ let grid3 = [
     "r5nnbr6nnr9nn"
 ];
 
-let getPossibleCombinations = (() => {
-    let map = {};
+let getCombinationsThatAddToSum = (() => {
+    let alreadyGeneratedCombinations = {};
     let rangeTo = [, "1"];
     for (let i = 2; i <= 9; i++) {
         rangeTo[i] = rangeTo[i - 1] + i;
     }
 
-    function insertSorted(array, value) {
+    function addUsedDigit(array, value) {
         let high = array.length;
         let low = 0;
         while (low < high) {
-            let mid = (low + high) >>> 1;
+            let mid = (low + high) / 2;
             if (array[mid] < value) low = mid + 1;
             else high = mid;
         }
         return array.substring(0, low) + value + array.substring(low);
     }
-
-    function recur(sum, numSquares, unusedNumbers) {
-        let key = [sum, numSquares, unusedNumbers].toString();
-        if (map[key]) return map[key];
-        if (numSquares === 1) {
-            return map[key] = unusedNumbers.includes(sum) && sum <= 9 && sum >= 1 ? [String(sum)] : [];
+    function isValidDigit(candidate) {
+        return candidate <= 9 && candidate >= 1;
+    }
+    function removeUsedDigit(string, digit) {
+        return string.replace(String(digit), "");
+    }
+    function getCombinationThatAddsToSumWithNumberOfSquaresOnlyUsingUnusedDigits(sum, numberOfSquares, unusedDigits) {
+        let uniqueHashOfArguments = [sum, numberOfSquares, unusedDigits].toString();
+        if (alreadyGeneratedCombinations[uniqueHashOfArguments]) return alreadyGeneratedCombinations[uniqueHashOfArguments];
+        if (numberOfSquares === 1) {
+            return alreadyGeneratedCombinations[uniqueHashOfArguments] = (unusedDigits.includes(sum) && isValidDigit(sum)) ? [String(sum)] : [];
         }
-        let possibleValues = [];
-        [...unusedNumbers].forEach(i => {
-            let lowerStep = recur(sum - i, numSquares - 1, unusedNumbers.replace(String(i), ""));
-            for (let possibleValue of lowerStep) {
-                possibleValue = insertSorted(possibleValue, i);
-                if (!possibleValues.includes(possibleValue)) possibleValues.push(possibleValue);
-            }
+        let combinations = [];
+        [...unusedDigits].forEach(candidateDigit => {
+            unusedDigits = removeUsedDigit(unusedDigits, candidateDigit);
+            let combinationsAfterExcludingCandidateDigit = getCombinationThatAddsToSumWithNumberOfSquaresOnlyUsingUnusedDigits(sum - candidateDigit, numberOfSquares - 1, unusedDigits);
+            combinationsAfterExcludingCandidateDigit.forEach(candidateCombinationAfterExclusion => {
+                candidateCombinationAfterExclusion = addUsedDigit(candidateCombinationAfterExclusion, candidateDigit);
+                if (!combinations.includes(candidateCombinationAfterExclusion)) combinations.push(candidateCombinationAfterExclusion);
+            });
         });
-        return map[key] = possibleValues;
+        return alreadyGeneratedCombinations[uniqueHashOfArguments] = combinations;
     }
 
-    return (sum, x) => recur(sum, x, rangeTo[Math.min(9, sum)]);
+    return (sum, x) => getCombinationThatAddsToSumWithNumberOfSquaresOnlyUsingUnusedDigits(sum, x, rangeTo[Math.min(9, sum)]);
 })();
-console.log(getPossibleCombinations(45, 9));
 let clueCells = [];
 let numberCells = [];
 
@@ -88,16 +93,19 @@ class Sum {
     constructor(sum) {
         this.sum = sum;
         this.usedDigits = [];
-        this.possibleCombinationsIgnoringCurrentState = [];
-        this.possibleCombinations = [];
+        this.possibleCombinationsWithoutElimination = [];
+        this.possibleCombinationsAfterElimination = [];
         this.ownedCells = [];
+        this.possibleDigits = [];
     }
-
+    static getAllPossibleDigitsFromPossibleCombinations(combinations) {
+        return [...new Set([].concat(...combinations))];
+    }
     updatePossibleCombinationsAndDigits() {
-        let oldLength = this.possibleCombinations.length;
-        this.possibleCombinations = this.possibleCombinationsIgnoringCurrentState.filter(combination => this.usedDigits.every(usedDigit => combination.includes(usedDigit)));
-        if (oldLength !== this.possibleCombinations.length) {
-            this.possibleDigits = [...new Set([].concat(...this.possibleCombinations))];
+        let oldLength = this.possibleCombinationsAfterElimination.length;
+        this.possibleCombinationsAfterElimination = this.possibleCombinationsWithoutElimination.filter(combination => this.usedDigits.every(usedDigit => combination.includes(usedDigit)));
+        if (oldLength !== this.possibleCombinationsAfterElimination.length) {
+            this.possibleDigits = Sum.getAllPossibleDigitsFromPossibleCombinations(this.possibleCombinationsAfterElimination)
         }
     }
 
@@ -254,7 +262,7 @@ for (let clue of clueCells) {
             isRight ? col++ : row++;
             currCell = grid[row] && grid[row][col];
         }
-        sum.possibleCombinationsIgnoringCurrentState = getPossibleCombinations(sum.sum, numCells).map(combination => [...combination].map(Number));
+        sum.possibleCombinationsWithoutElimination = getCombinationsThatAddToSum(sum.sum, numCells).map(combination => [...combination].map(Number));
         sum.updatePossibleCombinationsAndDigits();
     }
 }
